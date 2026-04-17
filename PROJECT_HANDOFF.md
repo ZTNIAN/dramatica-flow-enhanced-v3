@@ -1,7 +1,7 @@
-# Dramatica-Flow Enhanced — 项目交接文档 V3
+# Dramatica-Flow Enhanced — 项目交接文档 V4
 
-> 最后更新：2026-04-17 11:10
-> **下次把本文件发给 AI，它就能读懂整个项目，包括V2→V3改了什么、怎么继续迭代V4。**
+> 最后更新：2026-04-17 11:25
+> **下次把本文件发给 AI，它就能读懂整个项目，包括V3→V4改了什么、怎么继续迭代V5。**
 
 ---
 
@@ -33,50 +33,41 @@
 
 ---
 
-## 三、V2 和 V3 的区别
-
-### V2 做了什么
-
-V2 修复了 V1 的 P0/P1 问题：
-- 质量仪表盘接入管线
-- 对比示例库注入 Writer prompt
-- 知识库注入 Architect prompt
-- LLM 重试增强
-- 动态规划器接入管线
-- 写作技巧库扩充
-- 番茄小说数据引入
-- 写作示例引入
-
-### V2 遗留问题
-
-| # | 问题 | 说明 |
-|---|------|------|
-| 1 | 知识库只引入了一小部分 | OpenMOSS 有大量规则/技巧/示例/指南未引入 |
-| 2 | Agent 提示词不够完整 | 缺少 OODA 循环、写手技能库、审查者检查清单 |
-| 3 | 动态规划器太基础 | 只有基本的进度跟踪，没有自适应分层公式 |
-| 4 | 没有测试反馈闭环 | 缺少 MiroFish 式的读者测试→反馈→优化循环 |
-| 5 | 没有题材指南 | 玄幻/悬疑等题材的具体写作指南 |
-| 6 | 五感描写和 Show Don't Tell 不够详细 | 只有概要，缺少详细的技巧和示例 |
+## 三、V3 和 V4 的区别
 
 ### V3 做了什么
 
-**V3 = V2 + OpenMOSS 全量知识库集成 + 动态规划器升级 + 管线优化**
+V3 全面集成 OpenMOSS 知识库：
+- 知识库从12个文件扩展到30+个
+- Agent提示词增强（五感/写手技能/审查清单/完整红线）
+- 动态规划器升级（自适应公式/自动战役生成/审计反馈）
+- 管线优化（审计→张力曲线自动调整）
+
+### V4 做了什么
+
+V4 = V3 + 知识库查询激励接入 + 番茄数据注入 + Web UI 新端点
 
 | 改动 | 文件 | 效果 |
 |------|------|------|
-| 知识库全量引入 | `core/knowledge_base/` | 从12个文件扩展到30+个文件 |
-| 五感描写指南注入 Architect | `core/agents/__init__.py` | 建筑师规划蓝图时自动参考五感配比 |
-| 常见错误注入 Architect | `core/agents/__init__.py` | 建筑师在 risk_scan 中预判常见错误 |
-| 写手技能库注入 Writer | `core/agents/__init__.py` | 写手写作时参考开篇钩子/人物出场/对话技巧/节奏控制 |
-| Show Don't Tell 详解注入 Writer | `core/agents/__init__.py` | 写手写完后自查，确保没有直接说"感到XX" |
-| 审查者检查清单注入 Auditor | `core/agents/__init__.py` | 审计员按9维逐项检查清单核对 |
-| 完整红线清单注入 Auditor | `core/agents/__init__.py` | 17条红线详细定义+示例+避免方法 |
-| 动态规划器升级 | `core/dynamic_planner.py` | 引入 OpenMOSS 完整自适应公式（100-5000+章） |
-| 动态规划器自动战役生成 | `core/dynamic_planner.py` | 根据总章节数自动生成战役规划 |
-| 审计分数反馈到张力曲线 | `core/pipeline.py` | 低分自动降张力，高分可加速，红线强制减速 |
-| 卷/篇规划层 | `core/dynamic_planner.py` | 超长篇1500章+自动启用四层结构 |
-| 番茄读者画像深度数据 | `core/knowledge_base/fanqie-data/` | 补充7z包中的深度分析报告和JSON数据 |
-| 题材指南 | `core/knowledge_base/references/genre-guides/` | 玄幻+悬疑题材写作指南 |
+| KB查询追踪机制 | `core/agents/__init__.py` | Agent每次注入知识库时自动记录查询 |
+| KB统计接入管线 | `core/pipeline.py` | 每章写完自动保存KB查询统计到 kb_queries.json |
+| KBIncentiveTracker接入 | `core/pipeline.py` | 管线支持传入 tracker，自动汇总 |
+| 番茄数据注入MarketAnalyzer | `core/agents/__init__.py` | market分析时自动引用番茄真实数据 |
+| Web UI: 世界观构建API | `core/server.py` | POST /api/books/{id}/worldbuild |
+| Web UI: 大纲规划API | `core/server.py` | POST /api/books/{id}/outline |
+| Web UI: 市场分析API | `core/server.py` | POST /api/action/market |
+| Web UI: 质量仪表盘API | `core/server.py` | GET /api/books/{id}/quality-dashboard |
+| Web UI: KB查询统计API | `core/server.py` | GET /api/books/{id}/kb-queries |
+
+### V4 还没做的事
+
+| 优先级 | 任务 | 说明 |
+|--------|------|------|
+| P1 | Web UI 前端页面集成 | HTML添加世界观/大纲/市场操作页面（后端API已就绪） |
+| P2 | 测试反馈闭环 | 模拟MiroFish读者测试→反馈→Agent反思 |
+| P2 | Agent能力画像 | 类似OpenMOSS的职工成长专家 |
+| P2 | 完善错误处理 | LLM超时/格式错误降级策略 |
+| P2 | 单元测试 | 覆盖validators和新增Agent |
 
 ---
 
@@ -310,22 +301,22 @@ df export 书名                          # 导出
 
 ---
 
-## 十、如何迭代 V4
+## 十、如何迭代 V5
 
-### V4 应该做什么（按优先级）
+### V5 应该做什么（按优先级）
 
 | 优先级 | 任务 | 说明 |
 |--------|------|------|
-| P1 | Web UI 集成世界观构建 | 目前只有CLI，Web UI缺此功能 |
-| P1 | Web UI 集成大纲规划 | 展示三幕结构+章纲+张力曲线图 |
-| P1 | 知识库查询激励接入管线 | Agent写完/审完后自动记录查询积分 |
-| P1 | 番茄数据注入MarketAnalyzer | market命令输出时引用番茄数据 |
-| P2 | 测试反馈闭环 | 模拟MiroFish读者测试→反馈分类→Agent反思 |
-| P2 | Agent能力画像 | 类似OpenMOSS的职工成长专家，给Agent打分和改进建议 |
-| P2 | 完善错误处理 | LLM超时/格式错误时的重试+降级策略 |
+| P1 | Web UI 前端集成世界观构建 | HTML添加表单+结果展示，后端API已就绪 |
+| P1 | Web UI 前端集成大纲规划 | HTML添加章纲表格+张力曲线图，后端API已就绪 |
+| P1 | Web UI 前端集成市场分析 | HTML添加结果展示，后端API已就绪 |
+| P1 | Web UI 添加质量仪表盘面板 | 各章评分趋势+维度雷达图 |
+| P2 | 测试反馈闭环 | 模拟MiroFish读者测试→反馈→Agent反思 |
+| P2 | Agent能力画像 | 类似OpenMOSS职工成长专家 |
+| P2 | 完善错误处理 | LLM超时/格式错误降级 |
 | P2 | 单元测试 | 覆盖validators和新增Agent |
 
-### V4 迭代流程
+### V5 迭代流程
 
 **第1步：准备交接材料**
 - 把本文件 `PROJECT_HANDOFF.md` 发给AI
