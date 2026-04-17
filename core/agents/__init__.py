@@ -48,6 +48,19 @@ _KB_REVIEWER_CHECKLIST = _load_kb("agent-specific/reviewer-checklist.md")
 _KB_REVIEW_CRITERIA_95 = _load_kb("rules/review-criteria-95.md")
 _KB_REDLINES = _load_kb("rules/redlines.md")
 
+# V4 新增：知识库查询追踪（供管线记录）
+_KB_QUERIES: list[tuple[str, str, str]] = []  # (agent_role, file_name, context)
+
+def _track_kb_query(agent_role: str, file_name: str, context: str = ""):
+    """记录一次知识库查询（供 KBIncentiveTracker 使用）"""
+    _KB_QUERIES.append((agent_role, file_name, context))
+
+def get_kb_queries() -> list[tuple[str, str, str]]:
+    """获取自上次清空以来的所有知识库查询记录"""
+    queries = list(_KB_QUERIES)
+    _KB_QUERIES.clear()
+    return queries
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 1. 建筑师 Agent
@@ -204,6 +217,15 @@ class ArchitectAgent:
 只输出 JSON，不要任何前言、说明或 Markdown。"""
 
         def _call() -> ArchitectBlueprint:
+            # 记录知识库查询
+            _track_kb_query("architect", "writing_techniques.md", "蓝图规划参考")
+            if _KB_FIVE_SENSES:
+                _track_kb_query("architect", "five-senses-description.md", "五感配比参考")
+            if _KB_COMMON_MISTAKES:
+                _track_kb_query("architect", "common-mistakes.md", "常见错误预判")
+            if _KB_ANTI_AI:
+                _track_kb_query("architect", "anti_ai_rules.md", "去AI味红线")
+
             resp = self.llm.complete([
                 LLMMessage("system", "你是故事建筑师，只输出合法 JSON，不输出任何说明文字。"),
                 LLMMessage("user", prompt),
@@ -466,6 +488,15 @@ class WriterAgent:
 {settlement_schema}"""
 
         def _call() -> WriterOutput:
+            # 记录知识库查询
+            _track_kb_query("writer", "anti_ai_rules.md", "去AI味规范")
+            if _KB_BEFORE_AFTER:
+                _track_kb_query("writer", "before_after_examples.md", "修改前后对比")
+            if _KB_WRITER_SKILLS:
+                _track_kb_query("writer", "writer-skills.md", "写手技能库")
+            if _KB_SHOW_DONT_TELL:
+                _track_kb_query("writer", "show-dont-tell.md", "Show Don't Tell")
+
             resp = self.llm.complete([
                 LLMMessage("system", system),
                 LLMMessage("user", prompt),
@@ -742,6 +773,14 @@ class AuditorAgent:
 只输出 JSON，不要任何说明。"""
 
         def _call() -> AuditReport:
+            # 记录知识库查询
+            if _KB_REVIEWER_CHECKLIST:
+                _track_kb_query("auditor", "reviewer-checklist.md", "审查者检查清单")
+            if _KB_REDLINES:
+                _track_kb_query("auditor", "redlines.md", "红线检查")
+            if _KB_REVIEW_CRITERIA_95:
+                _track_kb_query("auditor", "review-criteria-95.md", "95分标准")
+
             resp = self.llm.complete([
                 LLMMessage(
                     "system",
@@ -1313,6 +1352,17 @@ class MarketAnalyzerAgent:
 
     def __init__(self, llm: LLMProvider):
         self.llm = llm
+        # V4：预加载番茄市场数据
+        self._tomato_data = ""
+        tomato_files = [
+            "fanqie-data/番茄小说及男性向网文市场数据报告_完整版.md",
+            "fanqie-data/番茄小说男性向读者内容偏好研究报告_完整版.md",
+            "fanqie-data/番茄读者画像深度分析报告_v1.0.md",
+        ]
+        for f in tomato_files:
+            content = _load_kb(f)
+            if content:
+                self._tomato_data += f"\n### {f.split('/')[-1]}\n{content[:3000]}\n"
 
     def analyze(
         self,
@@ -1321,13 +1371,23 @@ class MarketAnalyzerAgent:
         target_platform: str = "番茄小说",
     ) -> _MarketAnalysisSchema:
 
+        # V4：注入番茄市场数据
+        tomato_section = ""
+        if self._tomato_data:
+            tomato_section = f"""
+## 番茄小说真实市场数据（V4引入，分析时必须参考）
+{self._tomato_data[:6000]}
+> 以上数据来自番茄小说平台的真实用户画像和市场调研，分析时请优先引用这些数据，
+> 而非凭空想象。读者画像、偏好趋势应以上述数据为准。
+"""
+
         prompt = f"""你是网文市场分析师，精通{target_platform}平台的读者偏好和题材趋势。
 
 ## 小说信息
 - 题材：{genre}
 - 设定：{premise}
 - 目标平台：{target_platform}
-
+{tomato_section}
 ## 输出要求（JSON）
 {{
   "target_audience": "目标读者画像（年龄/性别/阅读习惯）",
