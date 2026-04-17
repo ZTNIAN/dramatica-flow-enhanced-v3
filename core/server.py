@@ -2640,6 +2640,252 @@ async def ai_rewrite_segment(book_id: str, req: SegmentRewriteReq):
     return {"ok": True, "rewritten": rewritten}
 
 
+# ── V4: 增强 Agent API 端点 ─────────────────────────────────────────────────────
+
+class CharacterGrowthReq(BaseModel):
+    pass  # 自动从书籍配置中读取
+
+
+@app.post("/api/books/{book_id}/character-growth")
+async def api_character_growth(book_id: str, req: CharacterGrowthReq | None = None):
+    """角色成长规划：为主要角色生成详细的成长档案"""
+    _load_env()
+    sm = _sm(book_id)
+    from core.agents import CharacterGrowthExpert
+
+    try:
+        llm = _create_llm(temperature=0.7)
+    except Exception as e:
+        raise HTTPException(400, f"LLM 创建失败：{e}")
+
+    # 读取世界观和角色信息
+    from core.types.state import TruthFileKey
+    world_ctx = sm.read_truth_bundle([TruthFileKey.CURRENT_STATE, TruthFileKey.CHARACTER_MATRIX])
+
+    # 读取角色 JSON
+    setup_dir = sm.book_dir / "setup"
+    characters_json = ""
+    char_path = setup_dir / "characters.json"
+    if char_path.exists():
+        characters_json = char_path.read_text(encoding="utf-8")
+
+    if not world_ctx.strip() and not characters_json.strip():
+        raise HTTPException(400, "请先配置世界观和角色信息")
+
+    expert = CharacterGrowthExpert(llm)
+    try:
+        result = await asyncio.to_thread(
+            expert.plan_character_growth,
+            world_context=world_ctx,
+            characters_json=characters_json,
+        )
+        # 保存结果
+        output_dir = sm.state_dir / "enhanced"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        output_path = output_dir / "character_growth.json"
+        output_data = {
+            "profiles": [
+                {
+                    "character_id": p.character_id,
+                    "name": p.name,
+                    "basic_setting": p.basic_setting,
+                    "personality": p.personality,
+                    "backstory": p.backstory,
+                    "preferences": p.preferences,
+                    "abilities": p.abilities,
+                    "growth_trajectory": p.growth_trajectory,
+                    "turning_points": p.turning_points,
+                    "relationship_matrix": p.relationship_matrix,
+                }
+                for p in result.profiles
+            ],
+            "overall_note": result.overall_note,
+        }
+        output_path.write_text(json.dumps(output_data, ensure_ascii=False, indent=2), encoding="utf-8")
+        return {"ok": True, "data": output_data}
+    except Exception as e:
+        raise HTTPException(500, f"角色成长规划失败：{e}")
+
+
+class DialogueReviewReq(BaseModel):
+    chapter: int
+
+
+@app.post("/api/books/{book_id}/dialogue-review")
+async def api_dialogue_review(book_id: str, req: DialogueReviewReq):
+    """对话审查：审核指定章节的对话质量"""
+    _load_env()
+    sm = _sm(book_id)
+    from core.agents import DialogueExpert
+
+    content = sm.read_final(req.chapter) or sm.read_draft(req.chapter)
+    if not content:
+        raise HTTPException(404, f"第 {req.chapter} 章不存在")
+
+    try:
+        llm = _create_llm(temperature=0.3)
+    except Exception as e:
+        raise HTTPException(400, f"LLM 创建失败：{e}")
+
+    # 获取角色名列表
+    char_names = []
+    try:
+        chars_data = sm.read_characters()
+        if isinstance(chars_data, dict) and "characters" in chars_data:
+            char_names = [c.get("name", "") for c in chars_data["characters"] if c.get("name")]
+    except Exception:
+        pass
+
+    expert = DialogueExpert(llm)
+    try:
+        result = await asyncio.to_thread(
+            expert.review_dialogue,
+            chapter_content=content,
+            chapter_number=req.chapter,
+            characters=char_names,
+        )
+        return _dc_to_dict(result)
+    except Exception as e:
+        raise HTTPException(500, f"对话审查失败：{e}")
+
+
+class EmotionCurveReq(BaseModel):
+    pass  # 自动从章纲读取
+
+
+@app.post("/api/books/{book_id}/emotion-curve")
+async def api_emotion_curve(book_id: str, req: EmotionCurveReq | None = None):
+    """情绪曲线设计：为整本书规划情绪曲线"""
+    _load_env()
+    sm = _sm(book_id)
+    from core.agents import EmotionCurveDesigner
+
+    # 读取章纲
+    co_path = sm.state_dir / "chapter_outlines.json"
+    if not co_path.exists():
+        raise HTTPException(404, "请先生成章节大纲")
+    chapter_outlines = json.loads(co_path.read_text(encoding="utf-8"))
+
+    try:
+        cfg = sm.read_config()
+        genre = cfg.get("genre", "玄幻")
+    except Exception:
+        genre = "玄幻"
+
+    try:
+        llm = _create_llm(temperature=0.7)
+    except Exception as e:
+        raise HTTPException(400, f"LLM 创建失败：{e}")
+
+    designer = EmotionCurveDesigner(llm)
+    try:
+        result = await asyncio.to_thread(
+            designer.design_emotion_curve,
+            chapter_outlines=chapter_outlines,
+            total_chapters=len(chapter_outlines),
+            genre=genre,
+        )
+        output_data = {
+            "curve": [
+                {"chapter_number": ce.chapter_number, "emotion_type": ce.emotion_type,
+                 "intensity": ce.intensity, "note": ce.note}
+                for ce in result.curve
+            ],
+            "overall_trend": result.overall_trend,
+            "climax_chapters": result.climax_chapters,
+            "design_notes": result.design_notes,
+        }
+        # 保存
+        output_dir = sm.state_dir / "enhanced"
+        output_dir.mkdir(parents=True, exist_ok=True)
+        (output_dir / "emotion_curve.json").write_text(
+            json.dumps(output_data, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        return {"ok": True, "data": output_data}
+    except Exception as e:
+        raise HTTPException(500, f"情绪曲线设计失败：{e}")
+
+
+class FeedbackReq(BaseModel):
+    feedback: str
+    chapter_range: str = ""
+
+
+@app.post("/api/books/{book_id}/feedback")
+async def api_feedback(book_id: str, req: FeedbackReq):
+    """提交读者反馈：分类并路由到对应 Agent"""
+    _load_env()
+    from core.agents import FeedbackExpert
+
+    try:
+        llm = _create_llm(temperature=0.3)
+    except Exception as e:
+        raise HTTPException(400, f"LLM 创建失败：{e}")
+
+    expert = FeedbackExpert(llm)
+    try:
+        result = await asyncio.to_thread(
+            expert.categorize_feedback,
+            feedback_text=req.feedback,
+            chapter_range=req.chapter_range,
+        )
+        return _dc_to_dict(result)
+    except Exception as e:
+        raise HTTPException(500, f"反馈分析失败：{e}")
+
+
+class MiroFishReq(BaseModel):
+    chapter: int
+
+
+@app.post("/api/books/{book_id}/mirofish-test")
+async def api_mirofish_test(book_id: str, req: MiroFishReq):
+    """MiroFish 模拟测试：模拟1000名读者测试"""
+    _load_env()
+    sm = _sm(book_id)
+    from core.agents import MiroFishReader
+
+    content = sm.read_final(req.chapter) or sm.read_draft(req.chapter)
+    if not content:
+        raise HTTPException(404, f"第 {req.chapter} 章不存在")
+
+    try:
+        llm = _create_llm(temperature=0.5)
+    except Exception as e:
+        raise HTTPException(400, f"LLM 创建失败：{e}")
+
+    try:
+        cfg = sm.read_config()
+        genre = cfg.get("genre", "玄幻")
+    except Exception:
+        genre = "玄幻"
+
+    reader = MiroFishReader(llm)
+    try:
+        result = await asyncio.to_thread(
+            reader.simulate_readers,
+            chapter_content=content,
+            chapter_number=req.chapter,
+            genre=genre,
+        )
+        return _dc_to_dict(result)
+    except Exception as e:
+        raise HTTPException(500, f"MiroFish 测试失败：{e}")
+
+
+@app.get("/api/books/{book_id}/hook-designs")
+def api_hook_designs(book_id: str):
+    """获取钩子设计方案（从已保存的增强结果中读取）"""
+    sm = _sm(book_id)
+    hook_path = sm.state_dir / "enhanced" / "hook_designs.json"
+    if not hook_path.exists():
+        return {"designs": [], "message": "尚未生成钩子设计方案"}
+    try:
+        return json.loads(hook_path.read_text(encoding="utf-8"))
+    except Exception:
+        return {"designs": [], "message": "读取失败"}
+
+
 # ── /api/settings  读写 .env 配置 ────────────────────────────────────────────
 
 @app.get("/api/settings")
