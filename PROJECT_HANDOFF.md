@@ -676,4 +676,82 @@ V3 引入了 OpenMOSS 的全部知识库内容：
 
 ---
 
+## 十五、OpenMOSS 集成完整分析
+
+> 记录了 OpenMOSS 两个压缩包中哪些内容被引入 V3、哪些没有、以及原因。
+> 详细报告见 `V3_OPENMOSS_INTEGRATION_REPORT.md`。
+
+### 增强来源
+
+| 来源 | 链接 | 大小 | 内容 |
+|------|------|------|------|
+| gz 包 | https://litter.catbox.moe/xyzwkq.gz | 1.6MB | 完整项目：知识库 + Agent 提示词 + FastAPI 后端 + OpenClaw 技能 |
+| 7z 包 | https://litter.catbox.moe/2bmxac.7z | 158KB | 归档文档 + 工作流程规范 + 民国摸金校尉完整测试案例 |
+
+### gz 包集成情况
+
+#### ✅ 已 100% 引入（知识库文件 — 30+ 个全部复制）
+
+| 原始路径 | V3 路径 |
+|---------|---------|
+| `knowledge-base/rules/` 全部5个文件 | `core/knowledge_base/rules/` |
+| `knowledge-base/references/writing-techniques/` | `core/knowledge_base/references/writing-techniques/` |
+| `knowledge-base/references/genre-guides/` | `core/knowledge_base/references/genre-guides/` |
+| `knowledge-base/references/fanqie-novel/` | `core/knowledge_base/fanqie-data/` |
+| `knowledge-base/agent-specific/` | `core/knowledge_base/agent-specific/` |
+| `knowledge-base/examples/` | `core/knowledge_base/examples/` |
+| `knowledge-base/indexes/` | `core/knowledge_base/indexes/` |
+| `knowledge-base/query-incentive-system.md` | `core/knowledge_base/query-incentive-system.md` |
+
+#### ⚠️ 部分引入（概念融入代码，未作为独立文件）
+
+| 原始文件 | 集成方式 |
+|---------|---------|
+| `prompts/role/writer-v2.md` | OODA 循环 / 记忆系统的概念注入了 WriterAgent 提示词结构 |
+| `prompts/role/reviewer-v2.md` | 预判性审查 / 质量数据库的概念注入了 AuditorAgent 检查清单 |
+
+#### ❌ 未引入
+
+| 原始内容 | 原因 |
+|---------|------|
+| `prompts/role/` 其他 20+ 角色 | 架构完全不同（Dramatica-Flow 只有 9 个 Agent），不能直接套用 |
+| `app/` FastAPI 后端代码 | 完全不同的技术栈（数据库/认证/路由 vs 文件系统） |
+| `skills/` OpenClaw 技能 | 与小说写作系统无关 |
+
+### 7z 包集成情况
+
+#### ✅ 已引入
+
+| 内容 | V3 路径 |
+|------|---------|
+| `MOSS_动态分层规划机制.md` | 核心公式写入 `core/dynamic_planner.py` |
+| `归档/06-爬虫数据/读者画像深度分析报告.md` | `core/knowledge_base/fanqie-data/` |
+
+#### ⚠️ 概念参考
+
+| 内容 | 说明 |
+|------|------|
+| `MOSS工作流程规范_v6.0.md` | 双流程/95分投票/自动返工的概念已参考，概览版存为 `rules/v6.0-workflow-overview.md` |
+| `归档/99-历史备份/民国摸金校尉/` | 读了理解完整写作流程，作为测试参考 |
+
+#### ❌ 未引入
+
+| 内容 | 原因 |
+|------|------|
+| `MOSS_Agent框架深度审视报告.md` | 仅供参考，框架差异大 |
+
+### 总结
+
+| 类别 | 引入比例 | 说明 |
+|------|---------|------|
+| 知识库文件 | **100%** | 30+ 个文件全部复制到 V3 |
+| Agent 提示词 | **概念级** | OODA 循环、预判审查等概念已融入代码，原始 prompt 未作为独立文件 |
+| 工作流文档 | **概览级** | v6.0 核心概念已参考并实现，完整文档未复制 |
+| 后端代码 | **0%** | 架构完全不同，无法合并 |
+| 其他 Agent 角色 | **0%** | 20+ 角色与 V3 的 9 Agent 体系不兼容 |
+
+**结论：OpenMOSS 的知识库精华 100% 在 V3 仓库里了。以后迭代不需要再下载这两个压缩包。**
+
+---
+
 *本文档由AI自动生成。下次迭代时，把本文件发给AI即可快速理解整个项目。*
