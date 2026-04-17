@@ -36,6 +36,7 @@ from .types.state import (
 from .validators import PostWriteValidator
 from .quality_dashboard import QualityDashboard, ChapterStats
 from .dynamic_planner import DynamicPlanner
+from .kb_incentive import KBIncentiveTracker
 
 
 @dataclass
@@ -97,6 +98,7 @@ class WritingPipeline:
         patrol: PatrolAgent | None = None,  # 增强：巡查者（可选）
         dashboard: QualityDashboard | None = None,  # 增强：质量仪表盘（可选）
         dynamic_planner: DynamicPlanner | None = None,  # 增强：动态规划器（可选）
+        kb_tracker: KBIncentiveTracker | None = None,  # V4：知识库查询激励追踪
     ):
         self.sm = state_manager
         self.architect = architect
@@ -111,6 +113,7 @@ class WritingPipeline:
         self.patrol = patrol  # 增强：巡查者（可选）
         self.dashboard = dashboard  # 增强：质量仪表盘（可选）
         self.dynamic_planner = dynamic_planner  # 增强：动态规划器（可选）
+        self.kb_tracker = kb_tracker or KBIncentiveTracker()  # V4：知识库查询激励
 
     def run(
         self,
@@ -188,6 +191,10 @@ class WritingPipeline:
             pov_character=pov_character,
             thread_context=thread_context,
         )
+        # V4：记录建筑师的KB查询
+        from .agents import get_kb_queries
+        for role, fname, ctx in get_kb_queries():
+            self.kb_tracker.record_query(role, fname, ctx)
 
         # ── 2. 写手写章 ───────────────────────────────────────────────────────
         log("写手写章...")
@@ -209,6 +216,9 @@ class WritingPipeline:
         )
         self.sm.save_draft(ch, writer_output.content)
         log(f"草稿 {len(writer_output.content)} 字")
+        # V4：记录写手的KB查询
+        for role, fname, ctx in get_kb_queries():
+            self.kb_tracker.record_query(role, fname, ctx)
 
         # ── 3. 写后验证（零 LLM） ────────────────────────────────────────────
         log("写后验证...")
@@ -287,6 +297,9 @@ class WritingPipeline:
             settlement=writer_output.settlement,
             cross_thread_context=cross_thread_audit_ctx,
         )
+        # V4：记录审计员的KB查询
+        for role, fname, ctx in get_kb_queries():
+            self.kb_tracker.record_query(role, fname, ctx)
 
         revision_rounds = 0
         if 'total_rework' not in dir():
@@ -447,6 +460,27 @@ class WritingPipeline:
                     self.dynamic_planner.save(planner_path)
             except Exception as e:
                 log(f"动态规划器更新失败（不阻塞）：{e}")
+
+        # ── 14. 保存知识库查询统计（V4 新增）────────────────────────────────────
+        if self.kb_tracker and self.kb_tracker.queries:
+            log("保存知识库查询统计...")
+            try:
+                kb_path = self.sm.book_dir / "kb_queries.json"
+                existing = []
+                if kb_path.exists():
+                    existing = json.loads(kb_path.read_text(encoding="utf-8"))
+                existing.append({
+                    "chapter": ch,
+                    "queries": [
+                        {"role": q.agent_role, "file": q.knowledge_file,
+                         "time": q.query_time, "context": q.context}
+                        for q in self.kb_tracker.queries
+                    ],
+                })
+                kb_path.write_text(json.dumps(existing, ensure_ascii=False, indent=2), encoding="utf-8")
+                log(f"KB查询：本章 {len(self.kb_tracker.queries)} 次")
+            except Exception as e:
+                log(f"KB统计保存失败（不阻塞）：{e}")
 
         return PipelineResult(
             chapter_number=ch,
