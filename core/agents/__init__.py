@@ -22,6 +22,20 @@ from ..llm import LLMProvider, LLMMessage, parse_llm_json, with_retry
 from ..types.narrative import Character
 from ..narrative import ChapterOutlineSchema
 
+# ── V4: OpenMOSS 增强 Agent 导入 ──────────────────────────────────────────────
+from .enhanced_agents import (
+    CharacterGrowthExpert, CharacterGrowthResult, CharacterGrowthProfile,
+    DialogueExpert, DialogueReviewResult, LanguageFingerprint,
+    EmotionCurveDesigner, EmotionCurveResult, ChapterEmotion,
+    FeedbackExpert, FeedbackResult, FeedbackItem,
+    StyleConsistencyChecker, StyleConsistencyResult, StyleDimension,
+    SceneArchitect, SceneAuditResult, SceneDimension,
+    PsychologicalPortrayalExpert, PsychologicalAuditResult, PsychologicalDimension,
+    MiroFishReader, MiroFishResult, ReaderSegment,
+    get_hook_designer_prompt_injection,
+    get_opening_ending_prompt_injection,
+)
+
 
 # ── 知识库加载辅助 ───────────────────────────────────────────────────────────
 
@@ -199,6 +213,9 @@ class ArchitectAgent:
 
 ## 去AI味红线（建筑师需在节奏建议中规避以下问题）
 {_KB_ANTI_AI[:2000] if _KB_ANTI_AI else "（无）"}
+
+{get_hook_designer_prompt_injection()}
+{get_opening_ending_prompt_injection(chapter_outline.chapter_number, 90)}
 
 请输出完整 JSON，字段说明：
 - core_conflict：本章核心冲突（一句话，必须源于角色目标与障碍的碰撞）
