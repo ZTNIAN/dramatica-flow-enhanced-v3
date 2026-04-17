@@ -754,4 +754,81 @@ V3 引入了 OpenMOSS 的全部知识库内容：
 
 ---
 
+## 十六、V4 Agent 增强说明（P1-P3 集成）
+
+V4 在 V3 的 9 个 Agent 基础上，从 OpenMOSS 引入了 10 个增强 Agent，总计 19 个。
+
+### 新增 Agent 清单
+
+| 优先级 | Agent | 职责 | 插入位置 |
+|--------|-------|------|---------|
+| P1 | CharacterGrowthExpert | 角色详细设定 + 成长弧线规划（8维档案） | WorldBuilder → **CharacterGrowth** → OutlinePlanner |
+| P1 | DialogueExpert | 对话审查 + 语言指纹六维度设计 | Writer → **DialogueExpert** → Patrol |
+| P1 | EmotionCurveDesigner | 整书情绪曲线 + 每章情绪类型规划 | OutlinePlanner 之后增强章纲 |
+| P1 | FeedbackExpert | 读者反馈分类 → 路由到对应Agent → 闭环追踪 | 独立步骤，审计之后 |
+| P2 | HookDesigner | 7种章末钩子类型方法论 | 注入 ArchitectAgent prompt |
+| P2 | OpeningEndingDesigner | 黄金三章 + 全书结尾设计方法论 | 注入 ArchitectAgent prompt |
+| P2 | StyleConsistencyChecker | 五维一致性检查（文笔/语气/节奏/时代/情感） | Auditor 之后 |
+| P3 | SceneArchitect | 场景四维审核（空间/感官/氛围/转场） | Auditor 之前 |
+| P3 | PsychologicalPortrayalExpert | 心理四维审核（真实性/层次/留白/行为一致） | Auditor 之前 |
+| P3 | MiroFishReader | 1000名读者模拟测试 + 结构化反馈 | 每N章后调用 |
+
+### 新管线流程
+
+```
+[世界构建] → [角色成长规划] → [情绪曲线设计] → [大纲规划]
+    ↓
+[单章循环]
+    ├── 建筑师（增强：注入钩子设计+开篇结尾方法论）
+    ├── 写手
+    ├── 对话专家审查（新增）
+    ├── 巡查者
+    ├── 场景审核 + 心理审核（新增）
+    ├── 审计员
+    ├── 风格一致性检查（新增）
+    │   └── 不通过 → 修订者修正 → 再审（最多3轮）
+    ├── 保存最终稿
+    ├── 因果链提取 → 摘要生成 → 状态更新
+    ├── 质量仪表盘记录
+    ├── 动态规划器更新
+    └── KB查询统计保存
+    ↓
+[MiroFish测试]（每N章后，可选）
+    ↓
+[反馈闭环]（可选）
+    ↓
+[导出]
+```
+
+### 新增文件
+
+| 文件 | 说明 |
+|------|------|
+| `core/agents/enhanced_agents.py` | 10个新Agent类（1104行） |
+| `core/knowledge_base/agent-specific/hook-designer-guide.md` | 钩子设计指南 |
+| `core/knowledge_base/agent-specific/opening-ending-guide.md` | 开篇结尾设计指南 |
+| `core/knowledge_base/agent-specific/emotion-curve-guide.md` | 情绪曲线指南 |
+| `core/knowledge_base/agent-specific/dialogue-expert-guide.md` | 对话专家指南 |
+| `core/knowledge_base/agent-specific/character-growth-guide.md` | 人物成长指南 |
+| `core/knowledge_base/agent-specific/style-consistency-guide.md` | 风格一致性指南 |
+| `core/knowledge_base/agent-specific/scene-architect-guide.md` | 场景构建指南 |
+| `core/knowledge_base/agent-specific/psychological-portrayal-guide.md` | 心理刻画指南 |
+
+### 新增 API 端点
+
+| 端点 | 方法 | 用途 |
+|------|------|------|
+| `/api/books/{id}/character-growth` | POST | 角色成长规划 |
+| `/api/books/{id}/dialogue-review` | POST | 对话审查 |
+| `/api/books/{id}/emotion-curve` | POST | 情绪曲线设计 |
+| `/api/books/{id}/feedback` | POST | 提交读者反馈 |
+| `/api/books/{id}/mirofish-test` | POST | MiroFish模拟测试 |
+| `/api/books/{id}/hook-designs` | GET | 获取钩子设计方案 |
+
+### 向后兼容
+
+所有新 Agent 参数均为可选。不传入时，管线行为与 V3 完全一致。
+
+---
+
 *本文档由AI自动生成。下次迭代时，把本文件发给AI即可快速理解整个项目。*
