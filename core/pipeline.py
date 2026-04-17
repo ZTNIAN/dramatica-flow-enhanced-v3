@@ -25,6 +25,15 @@ from .agents import (
     AuditorAgent, AuditReport, AuditIssue,
     ReviserAgent, ReviseResult,
     SummaryAgent,
+    # V4: 增强 Agent
+    DialogueExpert, DialogueReviewResult,
+    EmotionCurveDesigner, EmotionCurveResult,
+    CharacterGrowthExpert, CharacterGrowthResult,
+    FeedbackExpert, FeedbackResult,
+    StyleConsistencyChecker, StyleConsistencyResult,
+    SceneArchitect, SceneAuditResult,
+    PsychologicalPortrayalExpert, PsychologicalAuditResult,
+    MiroFishReader, MiroFishResult,
 )
 from .narrative import NarrativeEngine, ChapterOutlineSchema
 from .state import StateManager
@@ -99,6 +108,15 @@ class WritingPipeline:
         dashboard: QualityDashboard | None = None,  # 增强：质量仪表盘（可选）
         dynamic_planner: DynamicPlanner | None = None,  # 增强：动态规划器（可选）
         kb_tracker: KBIncentiveTracker | None = None,  # V4：知识库查询激励追踪
+        # V4: 增强 Agent（可选）
+        dialogue_expert: DialogueExpert | None = None,
+        emotion_curve_designer: EmotionCurveDesigner | None = None,
+        character_growth_expert: CharacterGrowthExpert | None = None,
+        feedback_expert: FeedbackExpert | None = None,
+        style_checker: StyleConsistencyChecker | None = None,
+        scene_architect: SceneArchitect | None = None,
+        psychological_expert: PsychologicalPortrayalExpert | None = None,
+        mirofish_reader: MiroFishReader | None = None,
     ):
         self.sm = state_manager
         self.architect = architect
@@ -114,6 +132,15 @@ class WritingPipeline:
         self.dashboard = dashboard  # 增强：质量仪表盘（可选）
         self.dynamic_planner = dynamic_planner  # 增强：动态规划器（可选）
         self.kb_tracker = kb_tracker or KBIncentiveTracker()  # V4：知识库查询激励
+        # V4: 增强 Agent
+        self.dialogue_expert = dialogue_expert
+        self.emotion_curve_designer = emotion_curve_designer
+        self.character_growth_expert = character_growth_expert
+        self.feedback_expert = feedback_expert
+        self.style_checker = style_checker
+        self.scene_architect = scene_architect
+        self.psychological_expert = psychological_expert
+        self.mirofish_reader = mirofish_reader
 
     def run(
         self,
@@ -220,6 +247,21 @@ class WritingPipeline:
         for role, fname, ctx in get_kb_queries():
             self.kb_tracker.record_query(role, fname, ctx)
 
+        # ── 2.5 对话专家审查（V4 增强）────────────────────────────────────────────
+        dialogue_review = None
+        if self.dialogue_expert:
+            log("对话专家审查...")
+            try:
+                char_names = [c.name for c in self.all_characters]
+                dialogue_review = self.dialogue_expert.review_dialogue(
+                    chapter_content=writer_output.content,
+                    chapter_number=ch,
+                    characters=char_names,
+                )
+                log(f"  对话评分：{dialogue_review.overall_score}/100")
+            except Exception as e:
+                log(f"  对话审查失败（不阻塞）：{e}")
+
         # ── 3. 写后验证（零 LLM） ────────────────────────────────────────────
         log("写后验证...")
         val_result = self.validator.validate(
@@ -276,6 +318,33 @@ class WritingPipeline:
             else:
                 log("  巡查通过")
 
+        # ── 3.7 场景审核 + 心理审核（V4 增强）──────────────────────────────────
+        scene_audit = None
+        if self.scene_architect:
+            log("场景审核...")
+            try:
+                scene_audit = self.scene_architect.audit_scene(
+                    chapter_content=current_content,
+                    chapter_number=ch,
+                )
+                log(f"  场景评分：{scene_audit.overall_score}/100")
+            except Exception as e:
+                log(f"  场景审核失败（不阻塞）：{e}")
+
+        psych_audit = None
+        if self.psychological_expert:
+            log("心理审核...")
+            try:
+                char_names = [c.name for c in self.all_characters]
+                psych_audit = self.psychological_expert.audit_psychology(
+                    chapter_content=current_content,
+                    chapter_number=ch,
+                    characters=char_names,
+                )
+                log(f"  心理评分：{psych_audit.overall_score}/100")
+            except Exception as e:
+                log(f"  心理审核失败（不阻塞）：{e}")
+
         # ── 4. 审计 → 修订闭环 ────────────────────────────────────────────────
         log("审计员审计...")
         audit_truth_ctx = self.sm.read_truth_bundle([
@@ -323,6 +392,23 @@ class WritingPipeline:
                 settlement=writer_output.settlement,
                 cross_thread_context=cross_thread_audit_ctx,
             )
+
+        # ── 4.5 风格一致性检查（V4 增强）─────────────────────────────────────────
+        style_check = None
+        if self.style_checker:
+            log("风格一致性检查...")
+            try:
+                # 采样最近5章 + 当前章进行风格对比
+                recent_chapters = []
+                for prev_ch in range(max(1, ch - 4), ch + 1):
+                    prev_content = self.sm.read_final(prev_ch) or self.sm.read_draft(prev_ch)
+                    if prev_content:
+                        recent_chapters.append({"number": prev_ch, "content": prev_content})
+                if recent_chapters:
+                    style_check = self.style_checker.check_consistency(recent_chapters)
+                    log(f"  风格一致性评分：{style_check.overall_score}/100")
+            except Exception as e:
+                log(f"  风格检查失败（不阻塞）：{e}")
 
         # ── 5. 保存最终稿 ─────────────────────────────────────────────────────
         self.sm.save_final(ch, current_content)
