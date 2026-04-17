@@ -693,6 +693,7 @@ async function loadStep3(forceSelect) {
         </div>
         <div style="display:flex;gap:8px;justify-content:center;margin-top:20px">
           <button class="btn btn-primary btn-lg" onclick="unlockStep(4);goStep(4)">进入大纲 &#8250;</button>
+          <button class="btn btn-lg" onclick="runCharacterGrowth()" style="border-color:var(--purple);color:var(--purple)">&#128101; 角色成长规划</button>
         </div>
       </div>`;
     return;
@@ -2178,6 +2179,10 @@ function loadStep5() {
               <button class="btn btn-primary" style="flex:1" onclick="doWrite(1)">写下一章</button>
               <button class="btn" style="flex:1" onclick="doWrite(3)">连续写 3 章</button>
             </div>
+            <div style="display:flex;gap:10px;margin-top:10px">
+              <button class="btn btn-sm" style="flex:1;border-color:var(--purple);color:var(--purple)" onclick="runDialogueReview()">&#128172; 对话审查</button>
+              <button class="btn btn-sm" style="flex:1;border-color:var(--orange);color:var(--orange)" onclick="runMiroFishTest()">&#128032; MiroFish 测试</button>
+            </div>
             <textarea id="qw-style-override" class="form-input" rows="2" placeholder="本次写作风格（可选，留空不改）。修改后会更新书籍默认风格" style="margin-top:10px"></textarea>
             <div id="write-log" style="margin-top:10px"></div>
           </div>
@@ -2598,10 +2603,12 @@ function loadStep6() {
             <button class="btn btn-warning" onclick="doRevise()">&#128295; 自动修订</button>
           </div>
           <!-- 标签页切换 -->
-          <div class="mode-tabs" style="margin-bottom:8px">
+          <div class="mode-tabs" style="margin-bottom:8px;flex-wrap:wrap">
             <div class="mode-tab active" id="tab-audit" onclick="switchAuditTab('audit',this)">审计结果</div>
             <div class="mode-tab" id="tab-story" onclick="switchAuditTab('story',this)">故事数据</div>
             <div class="mode-tab" id="tab-edit" onclick="switchAuditTab('edit',this)">正文编辑</div>
+            <div class="mode-tab" id="tab-emotion" onclick="switchAuditTab('emotion',this)" style="color:var(--red)">&#128171; 情绪曲线</div>
+            <div class="mode-tab" id="tab-style" onclick="switchAuditTab('style',this)" style="color:var(--blue)">&#128221; 风格一致性</div>
             <div class="mode-tab" id="tab-dashboard" onclick="switchAuditTab('dashboard',this)" style="color:var(--purple)">&#128200; 仪表盘</div>
             <div class="mode-tab" id="tab-kb" onclick="switchAuditTab('kb',this)" style="color:var(--orange)">&#128218; KB统计</div>
           </div>
@@ -2629,6 +2636,16 @@ function loadStep6() {
           <div class="card-header" style="color:var(--orange)">&#128218; 知识库查询统计 <button class="btn btn-sm" style="margin-left:auto" onclick="loadKBStats()">&#128260; 刷新</button></div>
           <div id="kb-content"><div class="loading">点击刷新加载</div></div>
         </div>
+        <!-- V4: 情绪曲线面板 -->
+        <div class="card" id="emotion-panel" style="display:none">
+          <div class="card-header" style="color:var(--red)">&#128171; 情绪曲线设计 <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="runEmotionCurve()">&#9889; 设计曲线</button></div>
+          <div id="emotion-content"><div class="empty">点击"设计曲线"生成整书情绪规划</div></div>
+        </div>
+        <!-- V4: 风格一致性面板 -->
+        <div class="card" id="style-panel" style="display:none">
+          <div class="card-header" style="color:var(--blue)">&#128221; 风格一致性检查 <button class="btn btn-primary btn-sm" style="margin-left:auto" onclick="runStyleCheck()">&#128269; 检查一致性</button></div>
+          <div id="style-content"><div class="empty">点击"检查一致性"进行跨章节风格对比</div></div>
+        </div>
       </div>
       <!-- 右侧：审计结果 + 正文 -->
       <div style="flex:1;min-width:0">
@@ -2653,6 +2670,8 @@ function switchAuditTab(tab, el) {
   document.getElementById('chapter-text-panel').style.display = (tab === 'edit') ? '' : 'none';
   document.getElementById('dashboard-panel').style.display = tab === 'dashboard' ? '' : 'none';
   document.getElementById('kb-panel').style.display = tab === 'kb' ? '' : 'none';
+  document.getElementById('emotion-panel').style.display = tab === 'emotion' ? '' : 'none';
+  document.getElementById('style-panel').style.display = tab === 'style' ? '' : 'none';
   if (tab === 'story') loadStoryData();
   if (tab === 'edit') loadAuditChapterText();
   if (tab === 'dashboard') loadQualityDashboard();
@@ -3372,6 +3391,212 @@ async function saveSettingsFromPage() {
   });
   apiConfigured = true; apiProvider = provider;
   updateStepsBar(); toast('设置已保存', true);
+}
+
+// ── V4: 角色成长规划 ─────────────────────────────────────────────────────
+
+async function runCharacterGrowth() {
+  if (!currentBook) { toast('请先选择书籍', false); return; }
+  toast('正在生成角色成长档案...', 'loading');
+  try {
+    const res = await api(`/books/${currentBook.id}/character-growth`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({}),
+    });
+    if (res.ok && res.data) {
+      const profiles = res.data.profiles || [];
+      let html = '<div class="card" style="border-color:var(--purple)"><div class="card-header" style="color:var(--purple)">&#10003; 角色成长档案已生成</div>';
+      profiles.forEach(p => {
+        html += `<div style="margin-bottom:16px;padding:12px;background:var(--bg-dark);border-radius:6px">
+          <div style="font-size:14px;font-weight:600;margin-bottom:8px">${esc(p.name)}</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;font-size:12px">
+            <div><span style="color:var(--text3)">核心性格：</span>${esc(p.personality?.core||'-')}</div>
+            <div><span style="color:var(--text3)">性格缺陷：</span>${esc(p.personality?.flaw||'-')}</div>
+            <div><span style="color:var(--text3)">初期状态：</span>${esc(p.growth_trajectory?.early||'-')}</div>
+            <div><span style="color:var(--text3)">终局状态：</span>${esc(p.growth_trajectory?.final||'-')}</div>
+          </div>
+          <div style="margin-top:6px;font-size:11px;color:var(--text3)">转折点：${(p.turning_points||[]).map(t => t.description).join(' → ')}</div>
+        </div>`;
+      });
+      html += `<div style="font-size:12px;color:var(--text2);margin-top:8px">${esc(res.data.overall_note||'')}</div></div>`;
+      // 在世界观面板附近显示
+      const panel = document.getElementById('step3-panel');
+      const existing = document.getElementById('char-growth-result');
+      if (existing) existing.remove();
+      const div = document.createElement('div');
+      div.id = 'char-growth-result';
+      div.innerHTML = html;
+      panel.prepend(div);
+      toast('角色成长档案已生成', true);
+    } else {
+      toast('生成失败', false);
+    }
+  } catch (e) { toast('请求失败: ' + e.message, false); }
+}
+
+// ── V4: 对话审查 ─────────────────────────────────────────────────────────
+
+async function runDialogueReview() {
+  if (!currentBook) { toast('请先选择书籍', false); return; }
+  const ch = (bookData?.book?.current_chapter || 1);
+  const chNum = prompt('请输入要审查的章节号：', ch);
+  if (!chNum) return;
+  toast('正在审查对话质量...', 'loading');
+  try {
+    const res = await api(`/books/${currentBook.id}/dialogue-review`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ chapter: parseInt(chNum) }),
+    });
+    if (res.language_fingerprints) {
+      let html = `<div class="card" style="border-color:var(--purple);margin-top:12px">
+        <div class="card-header" style="color:var(--purple)">&#128172; 对话审查结果（第${chNum}章）— 评分：${res.overall_score}/100</div>`;
+      if (res.language_fingerprints.length) {
+        html += '<div style="margin-bottom:12px"><div style="font-size:12px;font-weight:600;margin-bottom:6px">角色语言指纹</div>';
+        res.language_fingerprints.forEach(fp => {
+          html += `<div style="padding:8px;background:var(--bg-dark);border-radius:6px;margin-bottom:6px;font-size:12px">
+            <div style="font-weight:600;color:var(--blue)">${esc(fp.character_name)}</div>
+            <div style="color:var(--text2)">词汇：${esc(fp.vocabulary||'-')} | 句式：${esc(fp.sentence_structure||'-')} | 语速：${esc(fp.speaking_speed||'-')}</div>
+          </div>`;
+        });
+        html += '</div>';
+      }
+      html += `<div style="font-size:12px;color:var(--text2)"><b>节奏分析：</b>${esc(res.rhythm_analysis||'-')}</div>`;
+      html += `<div style="font-size:12px;color:var(--text2);margin-top:4px"><b>时代审核：</b>${esc(res.era_check||'-')}</div>`;
+      if (res.suggestions?.length) {
+        html += '<div style="margin-top:8px;font-size:12px"><b>建议：</b><ul style="margin:4px 0 0 16px;color:var(--text2)">';
+        res.suggestions.forEach(s => html += `<li>${esc(s)}</li>`);
+        html += '</ul></div>';
+      }
+      html += '</div>';
+      const workspace = document.getElementById('write-workspace');
+      if (workspace) workspace.innerHTML = html;
+      toast('对话审查完成', true);
+    } else {
+      toast('审查失败', false);
+    }
+  } catch (e) { toast('请求失败: ' + e.message, false); }
+}
+
+// ── V4: 情绪曲线 ─────────────────────────────────────────────────────────
+
+async function runEmotionCurve() {
+  if (!currentBook) { toast('请先选择书籍', false); return; }
+  const panel = document.getElementById('emotion-content');
+  panel.innerHTML = '<div class="loading">正在设计情绪曲线...</div>';
+  toast('正在设计整书情绪曲线...', 'loading');
+  try {
+    const res = await api(`/books/${currentBook.id}/emotion-curve`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({}),
+    });
+    if (res.ok && res.data) {
+      const d = res.data;
+      let html = `<div style="margin-bottom:12px"><b>整体趋势：</b>${esc(d.overall_trend)}</div>`;
+      html += `<div style="margin-bottom:12px"><b>高潮章节：</b>第${(d.climax_chapters||[]).join('、')}章</div>`;
+      // 简化柱状图
+      html += '<div style="display:flex;gap:2px;align-items:flex-end;height:100px;padding:8px 0;overflow-x:auto">';
+      const maxInt = 10;
+      (d.curve || []).forEach(ce => {
+        const h = Math.max(4, (ce.intensity / maxInt) * 80);
+        const colors = {压抑:'#888',紧张:'#f0883e',恐惧:'#bc8cff',爽:'#3fb950',感动:'#58a6ff',幽默:'#d29922',温暖:'#f0c674',愤怒:'#f85149',悲伤:'#6e7681',满足:'#3fb950'};
+        const color = colors[ce.emotion_type] || '#58a6ff';
+        html += `<div style="flex:1;min-width:16px;display:flex;flex-direction:column;align-items:center;gap:1px" title="第${ce.chapter_number}章: ${ce.emotion_type}(${ce.intensity})">
+          <div style="font-size:8px;color:var(--text3)">${ce.intensity}</div>
+          <div style="width:100%;height:${h}px;background:${color};border-radius:2px"></div>
+          <div style="font-size:7px;color:var(--text3);transform:rotate(-45deg);white-space:nowrap">${ce.chapter_number}</div>
+        </div>`;
+      });
+      html += '</div>';
+      if (d.design_notes) html += `<div style="font-size:12px;color:var(--text2);margin-top:8px;padding:8px;background:var(--bg-dark);border-radius:6px">${esc(d.design_notes)}</div>`;
+      panel.innerHTML = html;
+      toast('情绪曲线设计完成', true);
+    } else {
+      panel.innerHTML = '<div class="empty">设计失败</div>';
+      toast('情绪曲线设计失败', false);
+    }
+  } catch (e) { panel.innerHTML = `<div class="empty">错误: ${esc(e.message)}</div>`; toast('请求失败', false); }
+}
+
+// ── V4: 风格一致性检查 ───────────────────────────────────────────────────
+
+async function runStyleCheck() {
+  if (!currentBook) { toast('请先选择书籍', false); return; }
+  const panel = document.getElementById('style-content');
+  panel.innerHTML = '<div class="loading">正在检查风格一致性...</div>';
+  toast('正在跨章节检查风格一致性...', 'loading');
+  try {
+    // 从已有审计结果中获取风格数据（简化版：直接检查当前章节）
+    const ch = bookData?.book?.current_chapter || 1;
+    const res = await api(`/books/${currentBook.id}/three-layer-audit`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ chapter: ch, mode: 'language' }),
+    });
+    let html = '<div style="font-size:12px;color:var(--text2);margin-bottom:12px">基于第' + ch + '章的语言层审计结果</div>';
+    if (res.layers?.language) {
+      const lang = res.layers.language;
+      html += `<div style="padding:8px;background:${lang.passed ? 'var(--green-bg)' : 'var(--red-bg)'};border-radius:6px;margin-bottom:8px">
+        <span style="color:${lang.passed ? 'var(--green)' : 'var(--red)'};font-weight:600">${lang.passed ? '✓ 语言层通过' : '✗ 语言层未通过'}</span>
+        <span style="font-size:11px;color:var(--text3);margin-left:8px">${lang.issues?.length || 0} 个问题</span>
+      </div>`;
+      if (lang.issues?.length) {
+        html += '<div style="max-height:300px;overflow-y:auto">';
+        lang.issues.forEach(i => {
+          const sevColor = i.severity === 'critical' ? 'var(--red)' : 'var(--yellow)';
+          html += `<div style="padding:6px 8px;border-bottom:1px solid var(--border);font-size:12px">
+            <span style="color:${sevColor};font-weight:600;font-size:10px">[${i.severity?.toUpperCase()}]</span>
+            <span style="color:var(--text2)">${esc(i.description || '')}</span>
+          </div>`;
+        });
+        html += '</div>';
+      }
+    }
+    panel.innerHTML = html;
+    toast('风格检查完成', true);
+  } catch (e) { panel.innerHTML = `<div class="empty">错误: ${esc(e.message)}</div>`; toast('请求失败', false); }
+}
+
+// ── V4: MiroFish 测试 ───────────────────────────────────────────────────
+
+async function runMiroFishTest() {
+  if (!currentBook) { toast('请先选择书籍', false); return; }
+  const ch = (bookData?.book?.current_chapter || 1);
+  const chNum = prompt('请输入要测试的章节号：', ch);
+  if (!chNum) return;
+  toast('正在模拟1000名读者测试...', 'loading');
+  try {
+    const res = await api(`/books/${currentBook.id}/mirofish-test`, {
+      method: 'POST', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ chapter: parseInt(chNum) }),
+    });
+    if (res.segments) {
+      let html = `<div class="card" style="border-color:var(--orange);margin-top:12px">
+        <div class="card-header" style="color:var(--orange)">&#128032; MiroFish 模拟测试（第${chNum}章）— 总评：${res.overall_score}/100</div>
+        <div style="font-size:12px;color:var(--text2);margin-bottom:12px">模拟 ${res.total_readers} 名读者（核心20%/普通50%/路人30%）</div>`;
+      res.segments.forEach(seg => {
+        const scoreColor = seg.overall_score >= 80 ? 'var(--green)' : seg.overall_score >= 60 ? 'var(--yellow)' : 'var(--red)';
+        html += `<div style="padding:10px;background:var(--bg-dark);border-radius:6px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+            <span style="font-weight:600;font-size:13px">${esc(seg.segment_name)} (${seg.percentage}%)</span>
+            <span style="color:${scoreColor};font-weight:700;font-size:16px">${seg.overall_score}</span>
+          </div>
+          <div style="font-size:11px;color:var(--text3)">参与度: ${seg.engagement}/100</div>
+          ${seg.feedback?.length ? '<div style="margin-top:4px;font-size:11px;color:var(--text2)">' + seg.feedback.map(f => '• ' + esc(f)).join('<br>') + '</div>' : ''}
+          ${seg.key_issues?.length ? '<div style="margin-top:4px;font-size:11px;color:var(--red)">⚠ ' + seg.key_issues.map(i => esc(i)).join('、') + '</div>' : ''}
+        </div>`;
+      });
+      if (res.improvement_suggestions?.length) {
+        html += '<div style="margin-top:8px;font-size:12px"><b>改进建议：</b><ul style="margin:4px 0 0 16px;color:var(--text2)">';
+        res.improvement_suggestions.forEach(s => html += `<li>${esc(s)}</li>`);
+        html += '</ul></div>';
+      }
+      html += '</div>';
+      const workspace = document.getElementById('write-workspace');
+      if (workspace) workspace.innerHTML = html;
+      toast('MiroFish 测试完成', true);
+    } else {
+      toast('测试失败', false);
+    }
+  } catch (e) { toast('请求失败: ' + e.message, false); }
 }
 
 // ── 初始化 ────────────────────────────────────────────────────────────────
